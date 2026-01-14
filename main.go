@@ -29,6 +29,7 @@ const (
 
 	// 알림 시간 설정
 	MarketOpenTime  = "09:00"
+	MarketNoonTime  = "12:00"
 	MarketCloseTime = "15:30"
 	SkipWeekends    = true
 )
@@ -39,16 +40,16 @@ const (
 
 // 한국수출입은행 환율 응답
 type KoreaEximRate struct {
-	Result      int    `json:"result"`       // 조회 결과 (1: 성공)
-	CurUnit     string `json:"cur_unit"`     // 통화 코드
-	CurNm       string `json:"cur_nm"`       // 통화 이름
-	Ttb         string `json:"ttb"`          // 전신환 매입률
-	Tts         string `json:"tts"`          // 전신환 매도율
-	DealBasR    string `json:"deal_bas_r"`   // 매매기준율
-	BkprBuyR    string `json:"bkpr"`         // 장부가격(매입)
-	YyEfeeR     string `json:"yy_efee_r"`    // 연환가료율
-	TenDdEfeeR  string `json:"ten_dd_efee_r"` // 10일환가료율
-	KftcBkpr    string `json:"kftc_bkpr"`    // 서울외국환중개 매매기준율
+	Result       int    `json:"result"`          // 조회 결과 (1: 성공)
+	CurUnit      string `json:"cur_unit"`        // 통화 코드
+	CurNm        string `json:"cur_nm"`          // 통화 이름
+	Ttb          string `json:"ttb"`             // 전신환 매입률
+	Tts          string `json:"tts"`             // 전신환 매도율
+	DealBasR     string `json:"deal_bas_r"`      // 매매기준율
+	BkprBuyR     string `json:"bkpr"`            // 장부가격(매입)
+	YyEfeeR      string `json:"yy_efee_r"`       // 연환가료율
+	TenDdEfeeR   string `json:"ten_dd_efee_r"`   // 10일환가료율
+	KftcBkpr     string `json:"kftc_bkpr"`       // 서울외국환중개 매매기준율
 	KftcDealBasR string `json:"kftc_deal_bas_r"` // 서울외국환중개 장부가격
 }
 
@@ -94,7 +95,7 @@ var httpClient = &http.Client{
 func getKoreaEximRates() (map[string]float64, error) {
 	// 오늘 날짜 (YYYYMMDD)
 	today := time.Now().Format("20060102")
-	
+
 	apiURL := fmt.Sprintf(
 		"https://www.koreaexim.go.kr/site/program/financial/exchangeJSON?authkey=%s&searchdate=%s&data=AP01",
 		KoreaEximAPIKey, today,
@@ -324,6 +325,9 @@ func createMarketMessage(eventType string) string {
 	case "open":
 		header = "🔔 <b>장시작 알림</b> 🔔"
 		emoji = "🌅"
+	case "noon":
+		header = "🔔 <b>점심 알림</b> 🔔"
+		emoji = "☀️"
 	case "close":
 		header = "🔔 <b>장마감 알림</b> 🔔"
 		emoji = "🌆"
@@ -452,6 +456,21 @@ func notifyMarketOpen() {
 	}
 }
 
+func notifyMarketNoon() {
+	if SkipWeekends && isWeekend() {
+		fmt.Println("[알림] 주말이므로 점심 알림을 건너뜁니다.")
+		return
+	}
+
+	fmt.Println("[알림] 점심 알림 전송 중...")
+	message := createMarketMessage("noon")
+	if err := sendTelegramMessage(message); err != nil {
+		fmt.Printf("[오류] 메시지 전송 실패: %v\n", err)
+	} else {
+		fmt.Println("[성공] 점심 알림 전송 완료!")
+	}
+}
+
 func notifyMarketClose() {
 	if SkipWeekends && isWeekend() {
 		fmt.Println("[알림] 주말이므로 장마감 알림을 건너뜁니다.")
@@ -469,12 +488,13 @@ func notifyMarketClose() {
 
 func runScheduler() {
 	openHour, openMin := parseTime(MarketOpenTime)
+	noonHour, noonMin := parseTime(MarketNoonTime)
 	closeHour, closeMin := parseTime(MarketCloseTime)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	var lastOpenDate, lastCloseDate string
+	var lastOpenDate, lastNoonDate, lastCloseDate string
 
 	for range ticker.C {
 		now := time.Now()
@@ -485,6 +505,12 @@ func runScheduler() {
 		if hour == openHour && min == openMin && lastOpenDate != today {
 			lastOpenDate = today
 			notifyMarketOpen()
+		}
+
+		// 점심 알림
+		if hour == noonHour && min == noonMin && lastNoonDate != today {
+			lastNoonDate = today
+			notifyMarketNoon()
 		}
 
 		// 장마감 알림
@@ -504,6 +530,7 @@ func main() {
 	fmt.Println("📈 시장 알리미 (Market Notifier) - Go Version")
 	fmt.Println("==================================================")
 	fmt.Printf("장시작 알림 시간: %s\n", MarketOpenTime)
+	fmt.Printf("점심 알림 시간: %s\n", MarketNoonTime)
 	fmt.Printf("장마감 알림 시간: %s\n", MarketCloseTime)
 	fmt.Printf("주말 제외: %v\n", SkipWeekends)
 	fmt.Println("==================================================")
@@ -544,7 +571,7 @@ func main() {
 	// 시작 시 즉시 시장 정보 전송
 	fmt.Println("\n[시작] 현재 시장 정보를 전송합니다...")
 	startMsg := createMarketMessage("start")
-	
+
 	if err := sendTelegramMessage(startMsg); err != nil {
 		fmt.Printf("[오류] 시작 알림 전송 실패: %v\n", err)
 		fmt.Println("텔레그램 설정을 확인해주세요.")
