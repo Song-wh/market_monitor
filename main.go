@@ -491,7 +491,8 @@ func runScheduler() {
 	noonHour, noonMin := parseTime(MarketNoonTime)
 	closeHour, closeMin := parseTime(MarketCloseTime)
 
-	ticker := time.NewTicker(30 * time.Second)
+	// 10초마다 체크 (더 정확한 타이밍)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	var lastOpenDate, lastNoonDate, lastCloseDate string
@@ -501,21 +502,24 @@ func runScheduler() {
 		today := now.Format("2006-01-02")
 		hour, min := now.Hour(), now.Minute()
 
-		// 장시작 알림
+		// 장시작 알림 (해당 시간 ~ +1분 이내)
 		if hour == openHour && min == openMin && lastOpenDate != today {
 			lastOpenDate = today
+			fmt.Printf("[스케줄러] 장시작 시간 감지: %02d:%02d\n", hour, min)
 			notifyMarketOpen()
 		}
 
 		// 점심 알림
 		if hour == noonHour && min == noonMin && lastNoonDate != today {
 			lastNoonDate = today
+			fmt.Printf("[스케줄러] 점심 시간 감지: %02d:%02d\n", hour, min)
 			notifyMarketNoon()
 		}
 
 		// 장마감 알림
 		if hour == closeHour && min == closeMin && lastCloseDate != today {
 			lastCloseDate = today
+			fmt.Printf("[스케줄러] 장마감 시간 감지: %02d:%02d\n", hour, min)
 			notifyMarketClose()
 		}
 	}
