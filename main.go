@@ -13,6 +13,24 @@ import (
 	"time"
 )
 
+// 한국 시간대 (UTC+9)
+var kstLocation *time.Location
+
+func init() {
+	// 한국 시간대 로드 (실패시 수동으로 UTC+9 설정)
+	loc, err := time.LoadLocation("Asia/Seoul")
+	if err != nil {
+		kstLocation = time.FixedZone("KST", 9*60*60)
+	} else {
+		kstLocation = loc
+	}
+}
+
+// 한국 시간 반환
+func nowKST() time.Time {
+	return time.Now().In(kstLocation)
+}
+
 // ============================================
 // 설정 - 여기에 정보를 입력하세요
 // ============================================
@@ -93,8 +111,8 @@ var httpClient = &http.Client{
 // ============================================
 
 func getKoreaEximRates() (map[string]float64, error) {
-	// 오늘 날짜 (YYYYMMDD)
-	today := time.Now().Format("20060102")
+	// 오늘 날짜 (YYYYMMDD) - 한국 시간 기준
+	today := nowKST().Format("20060102")
 
 	apiURL := fmt.Sprintf(
 		"https://www.koreaexim.go.kr/site/program/financial/exchangeJSON?authkey=%s&searchdate=%s&data=AP01",
@@ -317,7 +335,7 @@ func sendTelegramMessage(message string) error {
 // ============================================
 
 func createMarketMessage(eventType string) string {
-	now := time.Now()
+	now := nowKST()
 	dateStr := now.Format("2006년 01월 02일 15:04")
 
 	var header, emoji string
@@ -432,7 +450,7 @@ func getDiffIcon(diff string) string {
 // ============================================
 
 func isWeekend() bool {
-	weekday := time.Now().Weekday()
+	weekday := nowKST().Weekday()
 	return weekday == time.Saturday || weekday == time.Sunday
 }
 
@@ -498,7 +516,7 @@ func runScheduler() {
 	var lastOpenDate, lastNoonDate, lastCloseDate string
 
 	for range ticker.C {
-		now := time.Now()
+		now := nowKST()
 		today := now.Format("2006-01-02")
 		hour, min := now.Hour(), now.Minute()
 
@@ -533,6 +551,7 @@ func main() {
 	fmt.Println("==================================================")
 	fmt.Println("📈 시장 알리미 (Market Notifier) - Go Version")
 	fmt.Println("==================================================")
+	fmt.Printf("⏰ 타임존: %s (현재: %s)\n", kstLocation.String(), nowKST().Format("2006-01-02 15:04:05"))
 	fmt.Printf("장시작 알림 시간: %s\n", MarketOpenTime)
 	fmt.Printf("점심 알림 시간: %s\n", MarketNoonTime)
 	fmt.Printf("장마감 알림 시간: %s\n", MarketCloseTime)
